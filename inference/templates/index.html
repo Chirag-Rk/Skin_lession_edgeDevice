@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DermOS - Skin Lesion Edge Diagnostic Terminal</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <i class="fa-solid fa-microscope emblem"></i>
+                <div class="logo-text">
+                    <h1>DermOS</h1>
+                    <p>Jetson Nano Edge Inference Terminal</p>
+                </div>
+            </div>
+            <div class="device-status">
+                <span class="badge" id="device-type-badge"><i class="fa-solid fa-microchip"></i> Loading Device...</span>
+                <span class="connection-status live"><i class="fa-solid fa-circle pulse-dot"></i> Live Feed</span>
+            </div>
+        </header>
+
+        <!-- Main Workspace Grid -->
+        <main class="app-grid">
+            
+            <!-- Column 1: Live Preview and Controls -->
+            <section class="grid-card preview-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-camera"></i> Dermoscope Live Feed</h2>
+                </div>
+                <div class="video-container">
+                    <img id="live-stream" src="/video_feed" alt="Camera Stream" />
+                    <div id="capture-overlay" class="capture-overlay">
+                        <i class="fa-solid fa-bolt flash-icon"></i>
+                    </div>
+                </div>
+                <div class="primary-controls">
+                    <button id="capture-btn" class="btn btn-primary btn-large">
+                        <i class="fa-solid fa-circle-radiation"></i> Capture & Diagnose
+                    </button>
+                    <div class="led-controls">
+                        <button id="led-toggle-btn" class="btn btn-secondary">
+                            <i class="fa-solid fa-lightbulb"></i> LED: Off
+                        </button>
+                        <button id="led-test-btn" class="btn btn-icon" title="Test Flash">
+                            <i class="fa-solid fa-bolt"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Column 2: Results and Explainability -->
+            <section class="grid-card results-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-chart-simple"></i> Diagnostic Output</h2>
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="overlay-tab">Blended Overlay</button>
+                        <button class="tab-btn" data-tab="heatmap-tab">Grad-CAM Map</button>
+                        <button class="tab-btn" data-tab="captured-tab">Original Crop</button>
+                    </div>
+                </div>
+                
+                <div class="tabs-content">
+                    <div id="overlay-tab" class="tab-pane active">
+                        <div class="image-display-frame">
+                            <img id="overlay-img" src="/static/outputs/overlay.png" class="result-img" onerror="this.src='https://placehold.co/128x128/1e1e24/ffffff?text=Blended+Overlay';" />
+                            <div class="img-label">Overlay (Gradient Blending)</div>
+                        </div>
+                    </div>
+                    <div id="heatmap-tab" class="tab-pane">
+                        <div class="image-display-frame">
+                            <img id="heatmap-img" src="/static/outputs/heatmap.png" class="result-img" onerror="this.src='https://placehold.co/128x128/1e1e24/ffffff?text=CAM+Heatmap';" />
+                            <div class="img-label">Attention CAM Map</div>
+                        </div>
+                    </div>
+                    <div id="captured-tab" class="tab-pane">
+                        <div class="image-display-frame">
+                            <img id="captured-img" src="/static/outputs/captured.png" class="result-img" onerror="this.src='https://placehold.co/128x128/1e1e24/ffffff?text=Captured+Crop';" />
+                            <div class="img-label">Dermoscopic Capture</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="classification-summary">
+                    <div class="predicted-header">
+                        <span class="pred-title">Detected Diagnosis:</span>
+                        <span id="top-class-label" class="pred-value">No scan captured</span>
+                        <span id="top-class-conf" class="pred-conf">--%</span>
+                    </div>
+                    <div id="probs-container" class="probs-bars">
+                        <!-- Filled by JS -->
+                        <p class="placeholder-text">Capture skin lesion to begin neural evaluation.</p>
+                    </div>
+                    <div class="timing-info">
+                        <span>Model Latency: <strong id="latency-val">0.00</strong> ms</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Column 3: System Stats & Federated Learning -->
+            <section class="grid-card side-card">
+                
+                <!-- System Resource Widget -->
+                <div class="sidebar-section system-status">
+                    <div class="section-header">
+                        <h3><i class="fa-solid fa-gauge-high"></i> Hardware Monitor</h3>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">CPU</span>
+                            <span id="cpu-stat" class="stat-value">0%</span>
+                            <div class="mini-bar"><div id="cpu-bar" class="mini-fill" style="width:0%"></div></div>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">GPU</span>
+                            <span id="gpu-stat" class="stat-value">0%</span>
+                            <div class="mini-bar"><div id="gpu-bar" class="mini-fill" style="width:0%"></div></div>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Memory</span>
+                            <span id="ram-stat" class="stat-value">0%</span>
+                            <div class="mini-bar"><div id="ram-bar" class="mini-fill" style="width:0%"></div></div>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Temp</span>
+                            <span id="temp-stat" class="stat-value">0.0°C</span>
+                            <div class="mini-bar"><div id="temp-bar" class="mini-fill" style="width:0%"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Federated Learning Operations -->
+                <div class="sidebar-section fl-section">
+                    <div class="section-header">
+                        <h3><i class="fa-solid fa-server"></i> Federated Node System</h3>
+                    </div>
+                    <div class="fl-controls">
+                        <div class="form-row">
+                            <label for="fl-client-id">Client ID Node:</label>
+                            <select id="fl-client-id" class="input-select">
+                                <option value="0">Client Node 0</option>
+                                <option value="1">Client Node 1</option>
+                                <option value="2">Client Node 2 (Domain Shift)</option>
+                            </select>
+                        </div>
+                        <div class="fl-action-buttons">
+                            <button id="fl-start-btn" class="btn btn-success btn-full"><i class="fa-solid fa-share-nodes"></i> Participate in FL Round</button>
+                            <button id="fl-stop-btn" class="btn btn-danger btn-full hidden"><i class="fa-solid fa-circle-stop"></i> Abort FL Session</button>
+                        </div>
+                        <div class="terminal-container">
+                            <div class="terminal-header">
+                                <span><i class="fa-solid fa-terminal"></i> node_client.log</span>
+                                <span id="fl-status-indicator" class="status-indicator idle">IDLE</span>
+                            </div>
+                            <pre id="terminal-output" class="terminal">Awaiting Federated communication...</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hardware Device Config Drawer -->
+                <div class="sidebar-section settings-section">
+                    <div class="section-header">
+                        <h3><i class="fa-solid fa-sliders"></i> Interface Settings</h3>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="setting-row">
+                            <label>Dermoscope Input:</label>
+                            <select id="camera-mode-select" class="setting-select">
+                                <option value="usb">USB Dermoscope (/dev/video0)</option>
+                                <option value="csi">Jetson CSI Camera</option>
+                                <option value="mock">Demo / Mock Feed</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <label>Video Port Index:</label>
+                            <input type="number" id="camera-index-input" value="0" min="0" max="9" class="setting-input" />
+                        </div>
+                        <div class="setting-row">
+                            <label>Ring Light GPIO Board Pin:</label>
+                            <input type="number" id="led-pin-input" value="12" min="1" max="40" class="setting-input" />
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </main>
+        
+    </div>
+
+    <!-- App Logic Scripts -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

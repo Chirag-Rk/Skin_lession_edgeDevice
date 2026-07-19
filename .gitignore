@@ -1,0 +1,9 @@
+venv/
+data/
+*.pt
+*.pth
+checkpoints/
+
+__pycache__/
+plots/
+logs/
