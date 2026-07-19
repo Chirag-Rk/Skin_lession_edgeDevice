@@ -11,9 +11,10 @@ except ImportError:
 class AttentionBlock(nn.Module):
     def __init__(self, dim):
         super().__init__()
+
         self.fc = nn.Sequential(
             nn.Linear(dim, dim),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(dim, dim),
             nn.Sigmoid()
         )
@@ -24,54 +25,91 @@ class AttentionBlock(nn.Module):
 
 class MobileNetAttentionModel(nn.Module):
     """
-    MobileNetV3-Large backbone + channel-wise attention + classifier head.
+    MobileNetV3-Small + Attention Model
+    Optimized for NVIDIA Jetson Nano (4GB)
 
     Args:
-        num_classes (int): Number of output classes. Default: 7
-        pretrained (bool): Load ImageNet pretrained weights for backbone.
-                           Set False to skip HuggingFace download. Default: True
-        use_attention (bool): Toggle attention block. Default: True
+        num_classes (int): Number of output classes.
+        pretrained (bool): Load ImageNet pretrained weights.
+        use_attention (bool): Enable/Disable Attention Block.
     """
 
-    def __init__(self, num_classes=7, pretrained=True, use_attention=True):
+    def __init__(
+        self,
+        num_classes=7,
+        pretrained=True,
+        use_attention=True
+    ):
         super().__init__()
+
         self.use_attention = use_attention
-        self.feat_dim = 1280
 
-        # ── Backbone ─────────────────────────────────────────────────────────
-        if TIMM_AVAILABLE:
-            try:
-                self.backbone = timm.create_model(
-                    "mobilenetv3_large_100",
-                    pretrained=pretrained,
-                    num_classes=0          # remove timm head
-                )
-            except Exception as e:
-                print(f"[Model] Warning: pretrained load failed ({e}). Using random weights.")
-                self.backbone = timm.create_model(
-                    "mobilenetv3_large_100",
-                    pretrained=False,
-                    num_classes=0
-                )
-        else:
-            raise ImportError("timm is required. Run: pip install timm")
+        # ------------------------------------------------------------
+        # Backbone
+        # ------------------------------------------------------------
+        if not TIMM_AVAILABLE:
+            raise ImportError("Please install timm:\npip install timm")
 
-        # ── Attention ─────────────────────────────────────────────────────────
+        try:
+            self.backbone = timm.create_model(
+                "mobilenetv3_small_100",
+                pretrained=pretrained,
+                num_classes=0
+            )
+        except Exception as e:
+            print(f"[Warning] Pretrained weights could not be loaded: {e}")
+            print("[Info] Using randomly initialized weights.")
+
+            self.backbone = timm.create_model(
+                "mobilenetv3_small_100",
+                pretrained=False,
+                num_classes=0
+            )
+
+        # Automatically detect output feature dimension
+        self.feat_dim = self.backbone.num_features
+
+        # ------------------------------------------------------------
+        # Attention
+        # ------------------------------------------------------------
         if self.use_attention:
             self.attn = AttentionBlock(self.feat_dim)
 
-        # ── Classifier ───────────────────────────────────────────────────────
+        # ------------------------------------------------------------
+        # Lightweight Classifier
+        # ------------------------------------------------------------
         self.classifier = nn.Sequential(
-            nn.Linear(self.feat_dim, 512),
-            nn.ReLU(),
+            nn.Linear(self.feat_dim, 256),
+            nn.ReLU(inplace=True),
             nn.Dropout(0.3),
-            nn.Linear(512, num_classes)
+            nn.Linear(256, num_classes)
         )
 
     def forward(self, x):
-        features = self.backbone(x)              # (B, 1280)
 
+        # Feature extraction
+        features = self.backbone(x)
+
+        # Attention
         if self.use_attention:
-            features = self.attn(features)       # channel-wise weighting
+            features = self.attn(features)
 
-        return self.classifier(features)         # (B, num_classes)
+        # Classification
+        output = self.classifier(features)
+
+        return output
+
+
+if __name__ == "__main__":
+
+    model = MobileNetAttentionModel()
+
+    x = torch.randn(1, 3, 128, 128)
+
+    y = model(x)
+
+    print(model)
+
+    print("\nOutput Shape:", y.shape)
+
+    print("Feature Dimension:", model.feat_dim)
